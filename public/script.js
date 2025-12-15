@@ -294,17 +294,49 @@ document.getElementById("leaveRoom")?.addEventListener("click", () => {
     // Clear the video grid
     videoGrid.innerHTML = "";
 
-    // Show a "You left the room" message
+    // Show a "You left the room" message with rejoin option
     const leftMessage = document.createElement("div");
     leftMessage.style.cssText =
       "text-align: center; margin-top: 100px; font-size: 24px;";
     leftMessage.innerHTML = `
       <p>📞 You have left the room</p>
-      <p style="margin-top: 20px;">
-        <a href="/" style="color: white; text-decoration: underline;">Join a new room</a>
+      <p style="margin-top: 30px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+        <button id="rejoinBtn" style="
+          background: #667eea;
+          color: white;
+          border: none;
+          padding: 12px 30px;
+          border-radius: 25px;
+          font-size: 16px;
+          cursor: pointer;
+          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+          transition: all 0.3s ease;
+        " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+          🔄 Rejoin this room
+        </button>
+        <a href="/" style="
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          padding: 12px 30px;
+          border-radius: 25px;
+          font-size: 16px;
+          text-decoration: none;
+          display: inline-block;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+          transition: all 0.3s ease;
+        " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+          ➕ Join a new room
+        </a>
       </p>
     `;
     document.querySelector(".container").appendChild(leftMessage);
+
+    // Add event listener for rejoin button
+    document.getElementById("rejoinBtn")?.addEventListener("click", () => {
+      // Reload the page to rejoin the same room
+      window.location.reload();
+    });
 
     // Hide controls
     controlsEl?.classList.add("hidden");

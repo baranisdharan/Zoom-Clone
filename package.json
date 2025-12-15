@@ -11,9 +11,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "peer": "peerjs --port 3001",
-    "dev": "concurrently \"npm run start:dev\" \"npm run peer\" --names \"NEST,PEER\" --prefix-colors \"blue,green\""
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -21,6 +19,7 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.0.0",
     "@nestjs/websockets": "^10.0.0",
+    "peer": "^1.0.2",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "socket.io": "^4.6.0",

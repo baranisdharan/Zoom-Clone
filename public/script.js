@@ -3,9 +3,27 @@ const ROOM_ID = window.location.pathname.substring(1);
 
 const socket = io("/");
 const videoGrid = document.getElementById("video-grid");
+
+// Connect to integrated PeerJS server
+const isSecure = window.location.protocol === "https:";
+const peerPort = window.location.port
+  ? parseInt(window.location.port)
+  : isSecure
+    ? 443
+    : 80;
+
+console.log("PeerJS connecting to:", {
+  host: window.location.hostname,
+  port: peerPort,
+  path: "/peerjs",
+  secure: isSecure,
+});
+
 const myPeer = new Peer(undefined, {
-  host: "/",
-  port: "3001",
+  host: window.location.hostname,
+  port: peerPort,
+  path: "/peerjs",
+  secure: isSecure,
 });
 
 const myVideo = document.createElement("video");

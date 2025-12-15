@@ -1,16 +1,17 @@
 import {
     WebSocketGateway,
-    SubscribeMessage,
-    MessageBody,
     WebSocketServer,
-    ConnectedSocket,
+    SubscribeMessage,
     OnGatewayConnection,
     OnGatewayDisconnect,
+    ConnectedSocket,
+    MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { RoomsService } from '../rooms/rooms.service';
-import { ConnectionsService } from '../connections/connections.service';
 import { JoinRoomEventDto } from './dtos/join-room-event.dto';
+import { ParticipantService } from '../rooms/services/participant.service';
+import { RoomQueryService } from '../rooms/services/room-query.service';
+import { SessionManagementService } from '../connections/services/session-management.service';
 
 @WebSocketGateway({
     cors: { origin: '*' },
@@ -21,19 +22,20 @@ export class EventsGateway
     server: Server;
 
     constructor(
-        private readonly roomsService: RoomsService,
-        private readonly connectionsService: ConnectionsService,
+        private readonly participantService: ParticipantService,
+        private readonly roomQueryService: RoomQueryService,
+        private readonly sessionManagementService: SessionManagementService,
     ) { }
 
     handleConnection(client: Socket) {
         console.log(`[WebSocket] Client connected: ${client.id}`);
     }
 
-    handleDisconnect(client: Socket) {
-        const userData = this.connectionsService.removeConnection(client.id);
+    async handleDisconnect(client: Socket) {
+        const userData = await this.sessionManagementService.removeSessionBySocketId(client.id);
 
         if (!userData) {
-            console.log(`[WebSocket] Client disconnected: ${client.id} (no user data found)`);
+            console.log(`[WebSocket] Client disconnected: ${client.id} (no session data found)`);
             return;
         }
 
@@ -44,15 +46,15 @@ export class EventsGateway
         );
 
         // Remove user from room
-        this.roomsService.removeUserFromRoom(roomId, userId);
+        await this.participantService.removeParticipant(roomId, userId);
 
         // Get updated room info
-        const roomInfo = this.roomsService.getRoomInfo(roomId);
-        const remainingUsers = this.roomsService.getRoomUsers(roomId);
+        const roomInfo = await this.roomQueryService.getRoomInfo(roomId);
+        const remainingUsers = await this.roomQueryService.getRoomUsers(roomId);
 
         console.log(
             `[WebSocket] Room ${roomId} now has ${roomInfo?.participantCount || 0} participants:`,
-            Array.from(remainingUsers),
+            remainingUsers,
         );
 
         // Notify others in the room
@@ -70,7 +72,7 @@ export class EventsGateway
     }
 
     @SubscribeMessage('join-room')
-    handleJoinRoom(
+    async handleJoinRoom(
         @ConnectedSocket() client: Socket,
         @MessageBody() data: JoinRoomEventDto,
     ) {
@@ -84,23 +86,24 @@ export class EventsGateway
             // Join the Socket.IO room first
             client.join(roomId);
 
-            // Register the connection
-            this.connectionsService.registerConnection(
+            // Register the session
+            await this.sessionManagementService.registerSession(
                 client.id,
                 userId,
                 roomId,
+                userId, // peerId is same as userId in current implementation
             );
 
             // Add user to room
-            this.roomsService.addUserToRoom(roomId, userId);
+            await this.participantService.addParticipant(roomId, userId);
 
             // Get updated room info
-            const roomInfo = this.roomsService.getRoomInfo(roomId);
-            const roomUsers = this.roomsService.getRoomUsers(roomId);
+            const roomInfo = await this.roomQueryService.getRoomInfo(roomId);
+            const roomUsers = await this.roomQueryService.getRoomUsers(roomId);
 
             console.log(
                 `[WebSocket] Room ${roomId} now has ${roomInfo?.participantCount} participants:`,
-                Array.from(roomUsers),
+                roomUsers,
             );
 
             // Notify all OTHER users in the room about this new connection
@@ -129,7 +132,7 @@ export class EventsGateway
     }
 
     @SubscribeMessage('leave-room')
-    handleLeaveRoom(
+    async handleLeaveRoom(
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { roomId: string; userId: string },
     ) {
@@ -141,14 +144,14 @@ export class EventsGateway
         client.leave(roomId);
 
         // Remove from services
-        this.roomsService.removeUserFromRoom(roomId, userId);
-        this.connectionsService.removeConnection(client.id);
+        await this.participantService.removeParticipant(roomId, userId);
+        await this.sessionManagementService.removeSessionBySocketId(client.id);
 
         // Notify others
         client.to(roomId).emit('user-disconnected', userId);
 
         // Update room stats
-        const roomInfo = this.roomsService.getRoomInfo(roomId);
+        const roomInfo = await this.roomQueryService.getRoomInfo(roomId);
         if (roomInfo) {
             this.server.to(roomId).emit('room-stats', {
                 participantCount: roomInfo.participantCount,

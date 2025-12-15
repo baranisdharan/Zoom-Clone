@@ -168,10 +168,7 @@ function connectToNewUser(userId, stream) {
     if (!userVideos[userId]) {
       const container = addVideoStream(video, userVideoStream, "Participant");
       userVideos[userId] = { video, container };
-
-      // Update local participant count
-      participantCount++;
-      updateParticipantCount(participantCount);
+      // Note: Server will broadcast room-stats with updated count
     }
   });
 
@@ -211,10 +208,7 @@ socket.on("user-disconnected", (userId) => {
     userVideos[userId].container.remove();
     delete userVideos[userId];
   }
-
-  // Update local participant count
-  participantCount--;
-  updateParticipantCount(participantCount);
+  // Note: Server will broadcast room-stats with updated count
 });
 
 // Handle room stats updates

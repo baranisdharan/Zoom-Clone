@@ -49,7 +49,13 @@ export class RoomsService {
             throw new RoomFullException(roomId, metadata.maxParticipants);
         }
 
+        const sizeBefore = room.size;
         room.add(userId);
+        const sizeAfter = room.size;
+
+        console.log(
+            `[RoomsService] Added user ${userId} to room ${roomId}. Size: ${sizeBefore} -> ${sizeAfter}`,
+        );
     }
 
     /**
@@ -57,14 +63,24 @@ export class RoomsService {
      */
     removeUserFromRoom(roomId: string, userId: string): void {
         const room = this.rooms.get(roomId);
-        if (!room) return;
+        if (!room) {
+            console.log(`[RoomsService] Cannot remove user ${userId}: room ${roomId} not found`);
+            return;
+        }
 
+        const sizeBefore = room.size;
         room.delete(userId);
+        const sizeAfter = room.size;
+
+        console.log(
+            `[RoomsService] Removed user ${userId} from room ${roomId}. Size: ${sizeBefore} -> ${sizeAfter}`,
+        );
 
         // Clean up empty rooms
         if (room.size === 0) {
             this.rooms.delete(roomId);
             this.roomMetadata.delete(roomId);
+            console.log(`[RoomsService] Deleted empty room ${roomId}`);
         }
     }
 

@@ -33,28 +33,39 @@ export class EventsGateway
         const userData = this.connectionsService.removeConnection(client.id);
 
         if (!userData) {
-            console.log(`[WebSocket] Client disconnected: ${client.id}`);
+            console.log(`[WebSocket] Client disconnected: ${client.id} (no user data found)`);
             return;
         }
 
         const { roomId, userId } = userData;
 
         console.log(
-            `[WebSocket] User ${userId} disconnected from room ${roomId}`,
+            `[WebSocket] User ${userId} disconnected from room ${roomId} (socket: ${client.id})`,
         );
 
         // Remove user from room
         this.roomsService.removeUserFromRoom(roomId, userId);
 
+        // Get updated room info
+        const roomInfo = this.roomsService.getRoomInfo(roomId);
+        const remainingUsers = this.roomsService.getRoomUsers(roomId);
+
+        console.log(
+            `[WebSocket] Room ${roomId} now has ${roomInfo?.participantCount || 0} participants:`,
+            Array.from(remainingUsers),
+        );
+
         // Notify others in the room
         client.to(roomId).emit('user-disconnected', userId);
 
-        // Emit room stats update
-        const roomInfo = this.roomsService.getRoomInfo(roomId);
+        // Emit room stats update to remaining users
         if (roomInfo) {
             this.server.to(roomId).emit('room-stats', {
                 participantCount: roomInfo.participantCount,
             });
+            console.log(
+                `[WebSocket] Broadcasting room-stats after disconnect to ${roomId}: ${roomInfo.participantCount} participants`,
+            );
         }
     }
 
@@ -83,17 +94,26 @@ export class EventsGateway
             // Add user to room
             this.roomsService.addUserToRoom(roomId, userId);
 
-            // Notify all OTHER users in the room about this new connection
-            client.to(roomId).emit('user-connected', userId);
-
             // Get updated room info
             const roomInfo = this.roomsService.getRoomInfo(roomId);
+            const roomUsers = this.roomsService.getRoomUsers(roomId);
+
+            console.log(
+                `[WebSocket] Room ${roomId} now has ${roomInfo?.participantCount} participants:`,
+                Array.from(roomUsers),
+            );
+
+            // Notify all OTHER users in the room about this new connection
+            client.to(roomId).emit('user-connected', userId);
 
             // Send room stats to ALL users in the room (including the one who just joined)
             if (roomInfo) {
                 this.server.to(roomId).emit('room-stats', {
                     participantCount: roomInfo.participantCount,
                 });
+                console.log(
+                    `[WebSocket] Broadcasting room-stats to ${roomId}: ${roomInfo.participantCount} participants`,
+                );
             }
 
             console.log(

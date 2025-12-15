@@ -35,14 +35,48 @@ const userVideos = {}; // userId -> video element mapping
 
 let myStream;
 
-// Get user media
-navigator.mediaDevices
-  .getUserMedia({
-    video: true,
-    audio: true,
-  })
+// Get user media - Video is REQUIRED, Audio is OPTIONAL
+async function getMediaStream() {
+  try {
+    // Try to get both video and audio (best experience)
+    return await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+  } catch (err) {
+    console.log("Failed to get video and audio, trying video only...");
+    try {
+      // Try video only (audio is optional)
+      return await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    } catch (err2) {
+      console.error("Failed to get video stream:", err2);
+      alert(
+        "Camera access is required for this video chat app.\n\n" +
+          "Please allow camera access and reload the page.\n\n" +
+          "(Microphone is optional)"
+      );
+      throw err2;
+    }
+  }
+}
+
+getMediaStream()
   .then((stream) => {
     myStream = stream;
+
+    // Check what we got
+    const hasVideo = stream.getVideoTracks().length > 0;
+    const hasAudio = stream.getAudioTracks().length > 0;
+
+    if (hasAudio) {
+      console.log("✅ Video + Audio enabled");
+    } else {
+      console.log("✅ Video enabled, 🔇 Audio disabled (muted)");
+    }
+
     addVideoStream(myVideo, stream);
 
     // Answer incoming calls

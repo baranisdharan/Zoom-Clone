@@ -8,24 +8,52 @@
     <script defer src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
     <script src="/socket.io/socket.io.js" defer></script>
     <script src="script.js" defer></script>
+    <link rel="stylesheet" href="styles.css">
     <title>Zoom Clone - Video Room</title>
-    <style>
-        #video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, 300px);
-            grid-auto-rows: 300px;
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-    </style>
 </head>
 
 <body>
-    <div id="video-grid"></div>
+    <!-- Loading Indicator -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Connecting to room...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div id="error-message" class="error-message"></div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header with Room Info -->
+        <div class="header">
+            <h1>🎥 Video Conference</h1>
+            <div class="room-info">
+                <div class="participant-count">
+                    <span id="participant-count">1</span>
+                    <span>participant(s)</span>
+                </div>
+                <div class="room-id">
+                    Room: <span id="room-id"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Grid -->
+        <div id="video-grid"></div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="controls hidden" id="controls">
+        <button class="control-btn active" id="toggleVideo" title="Toggle Video">
+            📹
+        </button>
+        <button class="control-btn active" id="toggleAudio" title="Toggle Audio">
+            🎤
+        </button>
+        <button class="control-btn danger" id="leaveRoom" title="Leave Room">
+            📞
+        </button>
+    </div>
 </body>
 
 </html>

@@ -8,6 +8,9 @@ import {
     OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { RoomsService } from '../rooms/rooms.service';
+import { ConnectionsService } from '../connections/connections.service';
+import { JoinRoomEventDto } from './dtos/join-room-event.dto';
 
 @WebSocketGateway({
     cors: { origin: '*' },
@@ -17,66 +20,120 @@ export class EventsGateway
     @WebSocketServer()
     server: Server;
 
-    // socket.id -> { roomId, userId }
-    private socketUserMap = new Map<
-        string,
-        { roomId: string; userId: string }
-    >();
-
-    // roomId -> Set<userId>
-    private roomUsers = new Map<string, Set<string>>();
+    constructor(
+        private readonly roomsService: RoomsService,
+        private readonly connectionsService: ConnectionsService,
+    ) { }
 
     handleConnection(client: Socket) {
-        console.log('Connected:', client.id);
+        console.log(`[WebSocket] Client connected: ${client.id}`);
     }
 
     handleDisconnect(client: Socket) {
-        const userData = this.socketUserMap.get(client.id);
+        const userData = this.connectionsService.removeConnection(client.id);
 
-        if (!userData) return;
+        if (!userData) {
+            console.log(`[WebSocket] Client disconnected: ${client.id}`);
+            return;
+        }
 
         const { roomId, userId } = userData;
 
-        console.log(`Disconnected: ${userId} from ${roomId}`);
+        console.log(
+            `[WebSocket] User ${userId} disconnected from room ${roomId}`,
+        );
 
-        // Remove user from room set
-        const users = this.roomUsers.get(roomId);
-        if (users) {
-            users.delete(userId);
-            if (users.size === 0) {
-                this.roomUsers.delete(roomId);
-            }
-        }
+        // Remove user from room
+        this.roomsService.removeUserFromRoom(roomId, userId);
 
-        // Notify others
+        // Notify others in the room
         client.to(roomId).emit('user-disconnected', userId);
 
-        // Cleanup
-        this.socketUserMap.delete(client.id);
+        // Emit room stats update
+        const roomInfo = this.roomsService.getRoomInfo(roomId);
+        if (roomInfo) {
+            this.server.to(roomId).emit('room-stats', {
+                participantCount: roomInfo.participantCount,
+            });
+        }
     }
 
     @SubscribeMessage('join-room')
     handleJoinRoom(
         @ConnectedSocket() client: Socket,
+        @MessageBody() data: JoinRoomEventDto,
+    ) {
+        try {
+            const { roomId, userId } = data;
+
+            console.log(
+                `[WebSocket] User ${userId} joining room ${roomId} via socket ${client.id}`,
+            );
+
+            // Join the Socket.IO room first
+            client.join(roomId);
+
+            // Register the connection
+            this.connectionsService.registerConnection(
+                client.id,
+                userId,
+                roomId,
+            );
+
+            // Add user to room
+            this.roomsService.addUserToRoom(roomId, userId);
+
+            // Notify all OTHER users in the room about this new connection
+            client.to(roomId).emit('user-connected', userId);
+
+            // Get updated room info
+            const roomInfo = this.roomsService.getRoomInfo(roomId);
+
+            // Send room stats to ALL users in the room (including the one who just joined)
+            if (roomInfo) {
+                this.server.to(roomId).emit('room-stats', {
+                    participantCount: roomInfo.participantCount,
+                });
+            }
+
+            console.log(
+                `[WebSocket] User ${userId} successfully joined room ${roomId}. Total participants: ${roomInfo?.participantCount}`,
+            );
+        } catch (error) {
+            console.error('[WebSocket] Error joining room:', error);
+            client.emit('error', {
+                message: 'Failed to join room',
+                error: error.message,
+            });
+        }
+    }
+
+    @SubscribeMessage('leave-room')
+    handleLeaveRoom(
+        @ConnectedSocket() client: Socket,
         @MessageBody() data: { roomId: string; userId: string },
     ) {
         const { roomId, userId } = data;
 
-        // Join the Socket.IO room
-        client.join(roomId);
+        console.log(`[WebSocket] User ${userId} leaving room ${roomId}`);
 
-        // Track this socket's user info for cleanup on disconnect
-        this.socketUserMap.set(client.id, { roomId, userId });
+        // Leave the Socket.IO room
+        client.leave(roomId);
 
-        // Track room membership
-        if (!this.roomUsers.has(roomId)) {
-            this.roomUsers.set(roomId, new Set());
+        // Remove from services
+        this.roomsService.removeUserFromRoom(roomId, userId);
+        this.connectionsService.removeConnection(client.id);
+
+        // Notify others
+        client.to(roomId).emit('user-disconnected', userId);
+
+        // Update room stats
+        const roomInfo = this.roomsService.getRoomInfo(roomId);
+        if (roomInfo) {
+            this.server.to(roomId).emit('room-stats', {
+                participantCount: roomInfo.participantCount,
+            });
         }
-        this.roomUsers.get(roomId)!.add(userId);
-
-        // Notify all OTHER users in the room about this new connection
-        client.to(roomId).emit('user-connected', userId);
-
-        console.log(`User ${userId} joined room ${roomId}`);
     }
 }
+
